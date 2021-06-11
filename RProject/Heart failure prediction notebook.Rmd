@@ -14,6 +14,7 @@ library(rpart.plot)
 library(caret);
 library(reshape2)
 library(DataExplorer)
+library(gridExtra)
 ```
 ### Impontring the data
 #### We will import `heart_failure_clinical_records_dataset.csv`
@@ -37,11 +38,21 @@ ggplot(data = cormap_melted, aes(x=Var1, y=Var2, fill=value) ) +
   geom_tile() + scale_fill_gradient2(low="darkred",high="purple",mid="white") + theme(axis.text.x = element_text(angle = 90)) + labs(title = 'Correlation')
 ```
 ```{r}
-ggplot(data, aes(x = serum_sodium)) + geom_histogram(binwidth = 0.5) + labs(title='Histogram of serum sodium distribution') 
+dead_sodium <- filter(data, DEATH_EVENT==1) %>% select(serum_sodium)
+alive_sodium <- filter(data, DEATH_EVENT==0) %>% select(serum_sodium)
+
+ggplot() + 
+  geom_histogram(data = dead_sodium, aes(serum_sodium, color='Dead'), alpha=0.5, binwidth = 1) + 
+  geom_histogram(data = alive_sodium,aes(serum_sodium, color='Alive'), alpha = 0.5, binwidth = 1) +
+  theme_light() + labs(color='State', title='Distribution of serum sodium for dead and alive patients', x='Serum Sodium (mEq/L)')
 ```
-##### The distribution is left skewed.
+
 ```{r}
-ggplot(data, aes(x=factor(sex), y=age, color=factor(sex))) + geom_boxplot(outlier.color = 'red', outlier.shape = 8) + geom_jitter(shape=16, position=position_jitter(0.2)) + labs(x='sex', title='Distribution of gender and their ages', color='sex') + scale_color_discrete(labels=c('Female', 'Male'))
+ggplot(data, aes(x = serum_creatinine)) + geom_histogram(binwidth = 0.5) + labs(title='Histogram of serum creatinine distribution', x='Serum creatinine (mg/dL)')
+```
+##### The distribution of `serum_sodium` is left skewed, while `serum_creatinine` is right skewed.
+```{r}
+ggplot(data, aes(x=factor(sex), y=age, color=factor(sex))) + geom_boxplot(outlier.color = 'black', outlier.shape = 8) + geom_jitter(shape=16, position=position_jitter(0.2)) + labs(x='sex', title='Distribution of gender and their ages', color='sex') + scale_color_discrete(labels=c('Female', 'Male'))
 ```
 #### Next, lets investigate some relations
 
