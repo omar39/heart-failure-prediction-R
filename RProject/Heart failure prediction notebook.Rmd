@@ -12,11 +12,14 @@ library(dplyr);
 library(rpart)
 library(rpart.plot)
 library(caret);
+library(reshape2)
+library(DataExplorer)
 ```
 ### Impontring the data
 #### We will import `heart_failure_clinical_records_dataset.csv`
 ```{r}
 data <- read.csv("heart_failure_clinical_records_dataset.csv")
+plot_missing(data)
 head(data, 10)
 ```
 
@@ -30,41 +33,46 @@ cormap_melted<-melt(cormap)
 
 
 #creating heatmap
-ggplot(data = cormap_melted, aes(x=Var1, y=Var2, fill=value)) + 
-  geom_tile("Correlation") + scale_fill_gradient2(low="darkred",high="purple",mid="white") + theme(axis.text.x = element_text(angle = 90))
+ggplot(data = cormap_melted, aes(x=Var1, y=Var2, fill=value) ) + 
+  geom_tile() + scale_fill_gradient2(low="darkred",high="purple",mid="white") + theme(axis.text.x = element_text(angle = 90)) + labs(title = 'Correlation')
 ```
 ```{r}
 ggplot(data, aes(x = serum_sodium)) + geom_histogram(binwidth = 0.5) + labs(title='Histogram of serum sodium distribution') 
+```
+##### The distribution is left skewed.
+```{r}
+ggplot(data, aes(x=factor(sex), y=age, color=factor(sex))) + geom_boxplot(outlier.color = 'red', outlier.shape = 8) + geom_jitter(shape=16, position=position_jitter(0.2)) + labs(x='sex', title='Distribution of gender and their ages', color='sex') + scale_color_discrete(labels=c('Female', 'Male'))
 ```
 #### Next, lets investigate some relations
 
 ### The duration of illness of dead patient and recovered patient
 ```{r}
 #Visualize the density distribution function of duration of illness and death event
- ggplot(data,aes(x = time,fill = as.factor(DEATH_EVENT))) +
+ ggplot(data, aes(x = time, fill = as.factor(DEATH_EVENT) )) +
         geom_density(alpha = 0.2) + theme_classic() + 
-        labs(title = "Density Distribution of Time", fill="Dead") + scale_fill_discrete(labels=c("Yes", "No"))
+        labs(title = "Density Distribution of Time", fill="Dead", x='Time of illness') + scale_fill_discrete(labels=c("Yes", "No"))
 ```
+##### At first, patient have higher probablility of recovery, while passing 100+ days incease the probablility of death.
 
-### Let's see how smoking affects the occurance of heart failure.
+### Let's see ejection fraction affects the occurance of heart failure.
 ```{r}
 #Visualize the density distribution function of smoking and the death event
- ggplot(data,aes(x = smoking,fill = as.factor(DEATH_EVENT)))+
+ ggplot(data,aes(x = ejection_fraction, fill = as.factor(DEATH_EVENT))) +
         geom_density(alpha = 0.2) + theme_classic() + 
-        labs(title = "Density Distribution of smoking rates to death events", fill='Dead')+ scale_fill_discrete(labels=c("Yes", "No"))
+        labs(title = "Density Distribution of ejection fraction to death events", fill='Dead', x='Ejection Fraction')+ scale_fill_discrete(labels=c("Yes", "No"))
 ```
-#### Although smoking as direct impact on health, heart failure is not correlated with smoking.
+##### Dead patients have higher probablility of having ejection fraction.
 
 ### Predict using Logistic Regression
 ```{r}
 set.seed(123) #setting the seed to make sure that the split function give us the same results
 
 taining.samples <- data$DEATH_EVENT %>%
-  createDataPartition(p=.5, list=FALSE) # splitting the data 50-50, to avoid over fitting
+  createDataPartition(p=0.5, list=FALSE) # splitting the data 50-50, to avoid over fitting
 
 # store the test data and train data
-train.data <- data[taining.samples, ]
-test.data <- data[- taining.samples, ]
+train.data <- data[taining.samples, ] #first partition of sample
+test.data <- data[- taining.samples, ] #last partition of sample
 
 # run the logistic regression model using all of the features we have using binomial classification
 model <- glm(DEATH_EVENT~., data = train.data, family=binomial())
@@ -106,7 +114,7 @@ heartTree<-rpart(Dead~.,data=data,control=rpart.control(cp=0.00001))
 
 
 #Creating a matrix to check the accuracy of decision tree
-conf.matrix <- table(data$Dead, predict(heartTree,type="class"))
+conf.matrix <- table(data$Dead, predict(heartTree, type="class"))
 
 rownames(conf.matrix) <- paste("Actual", rownames(conf.matrix), sep = ":")
 
@@ -130,6 +138,7 @@ Accuracy
 ```{r}
 # We will create a bar chart to visualize the feature importance descendingly
 importance <- data.frame(variables = names(heartTree$variable.importance), feature_importance = heartTree$variable.importance)
+
   ggplot(data = importance, aes(x=feature_importance, y=reorder(variables, X= feature_importance))) + geom_bar(stat = "identity",
             fill = 'lightgreen',
              alpha=0.9) +
@@ -144,4 +153,4 @@ ggplot(data=importance, aes(x="", y=feature_importance, fill=variables)) + geom_
   coord_polar("y", start=0)
 ```
 #### * `time` is the most effective of all, while `diabetes` is the least effective
-#### * `age` is not as effective as time
+#### * `sex` is not as effective as time
