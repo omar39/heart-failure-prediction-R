@@ -1,0 +1,147 @@
+---
+title: 'Heart Failure Analysis and Prediction'
+output: html_notebook
+---
+### About this dataset
+###### Cardiovascular diseases (CVDs) are the number 1 cause of death globally, taking an estimated 17.9 million lives each year, which accounts for 31% of all deaths worlwide.Heart failure is a common event caused by CVDs and this dataset contains 12 features that can be used to predict mortality by heart failure.Most cardiovascular diseases can be prevented by addressing behavioural risk factors such as tobacco use, unhealthy diet and obesity, physical inactivity and harmful use of alcohol using population-wide strategies.People with cardiovascular disease or who are at high cardiovascular risk (due to the presence of one or more risk factors such as hypertension, diabetes, hyperlipidaemia or already established disease) need early detection and management wherein a machine learning model can be of great help.
+
+### Importing libraries
+```{r}
+library(ggplot2)
+library(dplyr);
+library(rpart)
+library(rpart.plot)
+library(caret);
+```
+### Impontring the data
+#### We will import `heart_failure_clinical_records_dataset.csv`
+```{r}
+data <- read.csv("heart_failure_clinical_records_dataset.csv")
+head(data, 10)
+```
+
+### Fining correlations between features
+```{r}
+# calculating correlations and rounding to nearest 2 decimal points
+cormap <- round( cor(data), 2)
+
+#convert the matrix to a dataframe
+cormap_melted<-melt(cormap)
+
+
+#creating heatmap
+ggplot(data = cormap_melted, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile("Correlation") + scale_fill_gradient2(low="darkred",high="purple",mid="white") + theme(axis.text.x = element_text(angle = 90))
+```
+```{r}
+ggplot(data, aes(x = serum_sodium)) + geom_histogram(binwidth = 0.5) + labs(title='Histogram of serum sodium distribution') 
+```
+#### Next, lets investigate some relations
+
+### The duration of illness of dead patient and recovered patient
+```{r}
+#Visualize the density distribution function of duration of illness and death event
+ ggplot(data,aes(x = time,fill = as.factor(DEATH_EVENT))) +
+        geom_density(alpha = 0.2) + theme_classic() + 
+        labs(title = "Density Distribution of Time", fill="Dead") + scale_fill_discrete(labels=c("Yes", "No"))
+```
+
+### Let's see how smoking affects the occurance of heart failure.
+```{r}
+#Visualize the density distribution function of smoking and the death event
+ ggplot(data,aes(x = smoking,fill = as.factor(DEATH_EVENT)))+
+        geom_density(alpha = 0.2) + theme_classic() + 
+        labs(title = "Density Distribution of smoking rates to death events", fill='Dead')+ scale_fill_discrete(labels=c("Yes", "No"))
+```
+#### Although smoking as direct impact on health, heart failure is not correlated with smoking.
+
+### Predict using Logistic Regression
+```{r}
+set.seed(123) #setting the seed to make sure that the split function give us the same results
+
+taining.samples <- data$DEATH_EVENT %>%
+  createDataPartition(p=.5, list=FALSE) # splitting the data 50-50, to avoid over fitting
+
+# store the test data and train data
+train.data <- data[taining.samples, ]
+test.data <- data[- taining.samples, ]
+
+# run the logistic regression model using all of the features we have using binomial classification
+model <- glm(DEATH_EVENT~., data = train.data, family=binomial())
+
+# inspect the coefficients resulted from the logistic regression
+summary(model)$coef
+
+# testing the model
+probabilities <- model %>% predict(test.data, type = "response")
+
+# thresholding results; results from the logistic function >= 0.5 lies in the 1 class, while < 0.5 lies in the opposite one
+predicted.classes <- ifelse(probabilities >= 0.5, "1", "0")
+
+# Model accuracy
+mean(predicted.classes == test.data$DEATH_EVENT) * 100
+```
+## plotting logistic function with `time` parameter
+```{r}
+train.data %>%
+  mutate(prob = ifelse(DEATH_EVENT == "1", 1, 0)) %>%
+  ggplot(aes(time, prob)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  labs(
+    title = "Logistic Regression Model", 
+    x = "Time",
+    y = "Probability of heart failure")
+```
+### Creating the descision tree
+```{r}
+set.seed(123)
+data$Dead<-ifelse(data$DEATH_EVENT!=1,"No","Yes")
+
+#This variable is no needed for constructing a classification tree
+data$DEATH_EVENT<-NULL
+
+#creating tree, I will use a small critical point
+heartTree<-rpart(Dead~.,data=data,control=rpart.control(cp=0.00001))
+
+
+#Creating a matrix to check the accuracy of decision tree
+conf.matrix <- table(data$Dead, predict(heartTree,type="class"))
+
+rownames(conf.matrix) <- paste("Actual", rownames(conf.matrix), sep = ":")
+
+colnames(conf.matrix) <- paste("Pred", colnames(conf.matrix), sep = ":")
+
+print(conf.matrix)
+
+
+boxcols <- c( "palegreen3","red")[heartTree$frame$yval]
+
+par(xpd=TRUE)
+prp(heartTree, faclen = 0, cex = 0.8, box.col = boxcols,extra=2)
+legend("bottomleft", legend = c("Dead","Alive"), fill = c("red", "palegreen3"),
+       title = "Group")
+
+Accuracy<-(conf.matrix[1,1] + conf.matrix[2,2])/sum(conf.matrix)*100
+
+Accuracy
+```
+### Finding the real impact of features
+```{r}
+# We will create a bar chart to visualize the feature importance descendingly
+importance <- data.frame(variables = names(heartTree$variable.importance), feature_importance = heartTree$variable.importance)
+  ggplot(data = importance, aes(x=feature_importance, y=reorder(variables, X= feature_importance))) + geom_bar(stat = "identity",
+            fill = 'lightgreen',
+             alpha=0.9) +
+    labs(y = "features", title = "Feature importance of Decision Tree") +
+    theme_minimal(base_size = 12)
+```
+
+```{r}
+#Visualize the feature importance using pie chart
+importance <- data.frame(variables=names(heartTree$variable.importance), feature_importance=heartTree$variable.importance)
+ggplot(data=importance, aes(x="", y=feature_importance, fill=variables)) + geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0)
+```
+#### * `time` is the most effective of all, while `diabetes` is the least effective
+#### * `age` is not as effective as time
