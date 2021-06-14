@@ -80,44 +80,7 @@ ggplot(data, aes(x=factor(sex), y=age, color=factor(sex))) + geom_boxplot(outlie
 ```
 ##### Dead patients have higher probablility of having ejection fraction.
 
-### Predict using Logistic Regression
-```{r}
-set.seed(123) #setting the seed to make sure that the split function give us the same results
 
-taining.samples <- data$DEATH_EVENT %>%
-  createDataPartition(p=0.5, list=FALSE) # splitting the data 50-50, to avoid over fitting
-
-# store the test data and train data
-train.data <- data[taining.samples, ] #first partition of sample
-test.data <- data[- taining.samples, ] #last partition of sample
-
-# run the logistic regression model using all of the features we have using binomial classification
-model <- glm(DEATH_EVENT~., data = train.data, family=binomial())
-
-# inspect the coefficients resulted from the logistic regression
-summary(model)$coef
-
-# testing the model
-probabilities <- model %>% predict(test.data, type = "response")
-
-# thresholding results; results from the logistic function >= 0.5 lies in the 1 class, while < 0.5 lies in the opposite one
-predicted.classes <- ifelse(probabilities >= 0.5, "1", "0")
-
-# Model accuracy
-mean(predicted.classes == test.data$DEATH_EVENT) * 100
-```
-## plotting logistic function with `time` parameter
-```{r}
-train.data %>%
-  mutate(prob = ifelse(DEATH_EVENT == "1", 1, 0)) %>%
-  ggplot(aes(time, prob)) +
-  geom_point(alpha = 0.2) +
-  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
-  labs(
-    title = "Logistic Regression Model", 
-    x = "Time",
-    y = "Probability of heart failure")
-```
 ### Creating the descision tree
 ```{r}
 set.seed(123)
@@ -128,7 +91,8 @@ data$DEATH_EVENT<-NULL
 
 #creating tree, I will use a small critical point
 heartTree<-rpart(Dead~.,data=data,control=rpart.control(cp=0.00001))
-
+heartTree
+printcp(heartTree)
 
 #Creating a matrix to check the accuracy of decision tree
 conf.matrix <- table(data$Dead, predict(heartTree, type="class"))
@@ -161,7 +125,7 @@ importance <- data.frame(variables = names(heartTree$variable.importance), featu
              alpha=0.9) +
     labs(y = "features", title = "Feature importance of Decision Tree") +
     theme_minimal(base_size = 12)
-```
+``` 
 
 ```{r}
 #Visualize the feature importance using pie chart
@@ -171,3 +135,4 @@ ggplot(data=importance, aes(x="", y=feature_importance, fill=variables)) + geom_
 ```
 #### * `time` is the most effective of all, while `diabetes` is the least effective
 #### * `sex` is not as effective as time
+
